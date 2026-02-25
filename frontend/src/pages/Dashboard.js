@@ -206,7 +206,10 @@ const Dashboard = () => {
                 <div className="row">
                   <div className="col-6 border-end">
                     <small className="text-muted d-block">Shift Progress</small>
-                    <h5>Day {data.shiftStatus.shiftDay} / 15</h5>
+                    <h5>
+                      Day {data.shiftStatus.shiftDay} /{" "}
+                      {data.shiftStatus.totalDaysInShift}
+                    </h5>
                   </div>
                   <div className="col-6">
                     <small className="text-muted d-block">Letters Done</small>

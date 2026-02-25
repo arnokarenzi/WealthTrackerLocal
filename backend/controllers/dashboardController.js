@@ -61,6 +61,7 @@ export const getDashboard = async (req, res) => {
       behind: 0,
       isLastDay: day === 15 || day === lastDayOfMonth,
       shiftDay,
+      totalDaysInShift,
       isShift1,
     };
 
