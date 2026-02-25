@@ -66,25 +66,26 @@ export const getDashboard = async (req, res) => {
     };
 
     // 4. Performance Zone Logic
+    // --- UPDATED PERFORMANCE ZONE LOGIC ---
     if (shiftLetters > maxPace) {
-      // 🥇 GOLD: You are ahead of the 50/day pace
+      // GOLD
       shiftStatus.medal = "🥇 Gold";
       shiftStatus.message = `Elite Performance! Only ${remainingToMax} letters left to reach your shift cap.`;
       shiftStatus.variant = "warning";
     } else if (shiftLetters >= minPace) {
-      // 🥈 SILVER: You are in the "Safe Zone" (Between Min and Max)
+      // SILVER
+      const toGold = Math.ceil(maxPace - shiftLetters); //
       shiftStatus.medal = "🥈 Silver";
-      shiftStatus.message =
-        "Optimal Pace. You are safely meeting your shift requirements.";
+      shiftStatus.message = `Optimal Pace. You need ${toGold} more letters to hit the Gold track!`; //
       shiftStatus.variant = "secondary";
     } else if (shiftLetters >= minPace * 0.8) {
-      // 🥉 BRONZE: You are within 20% of the safety floor
+      // BRONZE
+      const toSilver = Math.ceil(minPace - shiftLetters); //
       shiftStatus.medal = "🥉 Bronze";
-      shiftStatus.message =
-        "Slightly behind pace. A small extra effort will put you back in Silver.";
+      shiftStatus.message = `Slightly behind pace. Add ${toSilver} more letters to reach Silver territory.`; //
       shiftStatus.variant = "success";
     } else {
-      // 🚨 DANGER: You are significantly behind
+      // DANGER
       shiftStatus.behind = Math.round(minPace - shiftLetters);
       shiftStatus.message = `DANGER: You are ${shiftStatus.behind} letters behind the safety guard!`;
       shiftStatus.variant = "danger";
