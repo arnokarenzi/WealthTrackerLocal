@@ -218,6 +218,26 @@ const Dashboard = () => {
                 </div>
               </div>
 
+              {/* PROJECTED EARNINGS SECTION */}
+              <div className="mt-3 p-3 bg-light rounded border mb-3">
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <small className="text-muted d-block">Projected Pay</small>
+                    <h4 className="mb-0 text-success">
+                      {data.shiftStatus.projectedPay.toLocaleString()} FRW
+                    </h4>
+                  </div>
+                  {data.shiftStatus.potentialLoss > 0 && (
+                    <div className="text-end">
+                      <small className="text-danger d-block">Wealth Gap</small>
+                      <span className="badge bg-danger">
+                        -{data.shiftStatus.potentialLoss.toLocaleString()} FRW
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="input-group mb-3">
                 <input
                   type="number"

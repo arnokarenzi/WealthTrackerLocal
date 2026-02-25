@@ -5,8 +5,6 @@ const n = (v) => {
   return Number.isFinite(x) ? x : 0;
 };
 
-// REPLACE your current getDashboard and updateLetters with this:
-
 export const getDashboard = async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM MonthlyBudget WHERE id = 1");
@@ -25,38 +23,33 @@ export const getDashboard = async (req, res) => {
     const emergencyPct =
       templates.length > 0 ? n(templates[0].emergency_pct) : 0;
 
-    // --- NEW SHIFT LOGIC ---
+    // --- 1. DYNAMIC CALENDAR SHIFT LOGIC ---
     const now = new Date();
     const day = now.getDate();
-    const isShift1 = day <= 15;
-    const shiftDay = isShift1 ? day : day - 15;
-
-    // Pace calculations: 40/day for Bronze (Min), 50/day for Silver/Gold (Max)
-    // --- DYNAMIC PACE & MEDAL ENGINE ---
-
-    // 1. Calculate exact length of the current shift (e.g., 13 days for Feb Shift 2)
     const lastDayOfMonth = new Date(
       now.getFullYear(),
       now.getMonth() + 1,
       0,
     ).getDate();
-    const totalDaysInShift = isShift1 ? 15 : lastDayOfMonth - 15;
 
-    // 2. Current progress day (Day 1 to 15)
+    const isShift1 = day <= 15;
+    const totalDaysInShift = isShift1 ? 15 : lastDayOfMonth - 15;
+    const shiftDay = isShift1 ? day : day - 15;
 
     const shiftLetters = n(b.shiftLetters);
     const remainingToMax = 750 - shiftLetters;
 
-    // 3. Dynamic Daily Targets
+    // --- 2. DYNAMIC PACE TARGETS ---
     const dailyMax = 750 / totalDaysInShift;
     const dailyMin = 600 / totalDaysInShift;
 
     const maxPace = shiftDay * dailyMax;
     const minPace = shiftDay * dailyMin;
 
+    // Initialize shiftStatus
     let shiftStatus = {
       medal: "None",
-      message: "Start translating to earn medals!",
+      message: "",
       variant: "light",
       behind: 0,
       isLastDay: day === 15 || day === lastDayOfMonth,
@@ -65,34 +58,48 @@ export const getDashboard = async (req, res) => {
       isShift1,
     };
 
-    // 4. Performance Zone Logic
-    // --- UPDATED PERFORMANCE ZONE LOGIC ---
-    if (shiftLetters > maxPace) {
-      // GOLD
+    // --- 3. PERFORMANCE ZONE LOGIC ---
+    if (shiftLetters >= maxPace) {
       shiftStatus.medal = "🥇 Gold";
       shiftStatus.message = `Elite Performance! Only ${remainingToMax} letters left to reach your shift cap.`;
       shiftStatus.variant = "warning";
     } else if (shiftLetters >= minPace) {
-      // SILVER
-      const toGold = Math.ceil(maxPace - shiftLetters); //
+      const toGold = Math.ceil(maxPace - shiftLetters);
       shiftStatus.medal = "🥈 Silver";
-      shiftStatus.message = `Optimal Pace. You need ${toGold} more letters to hit the Gold track!`; //
+      shiftStatus.message = `Optimal Pace. You need ${toGold} more letters to hit the Gold track!`;
       shiftStatus.variant = "secondary";
     } else if (shiftLetters >= minPace * 0.8) {
-      // BRONZE
-      const toSilver = Math.ceil(minPace - shiftLetters); //
+      const toSilver = Math.ceil(minPace - shiftLetters);
       shiftStatus.medal = "🥉 Bronze";
-      shiftStatus.message = `Slightly behind pace. Add ${toSilver} more letters to reach Silver territory.`; //
+      shiftStatus.message = `Slightly behind pace. Add ${toSilver} more letters to reach Silver territory.`;
       shiftStatus.variant = "success";
     } else {
-      // DANGER
       shiftStatus.behind = Math.round(minPace - shiftLetters);
+      shiftStatus.medal = "⚠️ Danger";
       shiftStatus.message = `DANGER: You are ${shiftStatus.behind} letters behind the safety guard!`;
       shiftStatus.variant = "danger";
     }
-    // --- END ENGINE ---
-    // -----------------------
 
+    // --- 4. PROJECTED EARNINGS ENGINE ---
+    const RATE_PER_LETTER = 230;
+    let projectedPay = 0;
+
+    // Logic: If you hit a medal, you get that tier's payout. Otherwise, pay per letter.
+    if (shiftStatus.medal.includes("Gold")) {
+      projectedPay = 750 * RATE_PER_LETTER;
+    } else if (shiftStatus.medal.includes("Silver")) {
+      projectedPay = 600 * RATE_PER_LETTER;
+    } else if (shiftStatus.medal.includes("Bronze")) {
+      projectedPay = 450 * RATE_PER_LETTER;
+    } else {
+      projectedPay = shiftLetters * RATE_PER_LETTER;
+    }
+
+    // Attach money metrics to status
+    shiftStatus.projectedPay = projectedPay;
+    shiftStatus.potentialLoss = 750 * RATE_PER_LETTER - projectedPay;
+
+    // --- 5. WEALTH SCORE CALCULATIONS ---
     const totalIncome = n(b.salary) + n(b.otherIncome);
     const essentials =
       n(b.rent) +
@@ -102,6 +109,7 @@ export const getDashboard = async (req, res) => {
       n(b.miscellaneous) +
       n(b.medical) +
       n(b.familySupport);
+
     const emergencyTarget = (totalIncome * emergencyPct) / 100;
     const efCompletionPct =
       emergencyTarget > 0
@@ -134,7 +142,7 @@ export const getDashboard = async (req, res) => {
       efCompletionPct: Math.round(efCompletionPct),
       seedRatio: Math.round(investRatio),
       essentials,
-      shiftStatus, // New data sent to frontend
+      shiftStatus,
       monthlyBudget: { ...b, remainingBalance: b.balance },
     });
   } catch (err) {
