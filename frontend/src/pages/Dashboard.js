@@ -10,13 +10,22 @@ const Dashboard = () => {
   const [numLetters, setNumLetters] = useState("");
 
   const handleAddLetters = async () => {
-    await fetch("http://localhost:5000/api/dashboard/letters", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ newLetters: numLetters }),
-    });
-    setNumLetters(""); // Clear input
-    loadData(); // Refresh dashboard stats
+    if (!numLetters) return; // Don't submit empty values
+
+    const valueToSubmit = numLetters; // Store value
+    setNumLetters(""); // Clear input immediately for better feel
+
+    try {
+      await fetch("http://localhost:5000/api/dashboard/letters", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newLetters: valueToSubmit }),
+      });
+      loadData();
+    } catch (err) {
+      console.error("Recording error:", err);
+      setNumLetters(valueToSubmit); // Restore value if it fails
+    }
   };
 
   // 1. ADD this new reset function inside the Dashboard component
@@ -245,6 +254,7 @@ const Dashboard = () => {
                   placeholder="Letters worked..."
                   value={numLetters}
                   onChange={(e) => setNumLetters(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddLetters()}
                 />
                 <button className="btn btn-dark" onClick={handleAddLetters}>
                   Record
@@ -295,6 +305,23 @@ const Dashboard = () => {
             >
               Save Reflection
             </button>
+
+            {/* ADD THIS PART TO USE THE VARIABLE AND FIX THE ERROR */}
+            <div className="mt-3">
+              <small className="text-muted d-block mb-2">
+                Past Reflections:
+              </small>
+              <ul className="list-group list-group-flush small">
+                {pastGratitudes.slice(0, 3).map((g, i) => (
+                  <li
+                    key={i}
+                    className="list-group-item px-0 bg-transparent border-light"
+                  >
+                    " {g.reflection} "
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
 
