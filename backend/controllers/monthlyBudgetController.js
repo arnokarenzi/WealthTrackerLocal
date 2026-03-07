@@ -144,23 +144,16 @@ export const resetMonth = async (req, res) => {
         if (goal.amount > 0) {
           await connection.query(
             `UPDATE SavingsGoal
-             SET currentSaved = currentSaved + ?,
-                 remaining = targetAmount - (currentSaved + ?),
-                 progress = ((currentSaved + ?) / targetAmount) * 100,
-                 status = CASE
-                   WHEN ((currentSaved + ?) / targetAmount) * 100 >= 100 THEN 'Completed'
-                   WHEN ((currentSaved + ?) / targetAmount) * 100 < 25 THEN 'Below 25% progress'
-                   ELSE 'In progress'
-                 END
-             WHERE goalName = ?`,
-            [
-              goal.amount,
-              goal.amount,
-              goal.amount,
-              goal.amount,
-              goal.amount,
-              goal.name,
-            ],
+   SET currentSaved = (@new := currentSaved + ?),
+       remaining = targetAmount - @new,
+       progress = LEAST(GREATEST((@new / targetAmount) * 100, 0), 100),
+       status = CASE
+         WHEN (@new / targetAmount) * 100 >= 100 THEN 'Completed'
+         WHEN (@new / targetAmount) * 100 < 25 THEN 'Below 25% progress'
+         ELSE 'In progress'
+       END
+   WHERE goalName = ?`,
+            [goal.amount, goal.name],
           );
         }
       }

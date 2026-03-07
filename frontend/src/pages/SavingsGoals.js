@@ -30,7 +30,17 @@ const SavingsGoals = () => {
               <td>{g.goalName}</td>
               <td>{Number(g.targetAmount).toLocaleString()}</td>
               <td>{Number(g.currentSaved).toLocaleString()}</td>
-              <td>{Number(g.progress).toFixed(1)}%</td>
+              <td>
+                <div className="d-flex align-items-center">
+                  <span className="me-2">{Number(g.progress).toFixed(1)}%</span>
+                  <div className="progress w-100" style={{ height: "6px" }}>
+                    <div
+                      className="progress-bar bg-success"
+                      style={{ width: `${Math.min(g.progress, 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
