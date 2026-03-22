@@ -238,7 +238,9 @@ const Dashboard = () => {
                   </div>
                   {data.shiftStatus.potentialLoss > 0 && (
                     <div className="text-end">
-                      <small className="text-danger d-block">Wealth Gap</small>
+                      <small className="text-danger d-block">
+                        Unreached Earnings
+                      </small>
                       <span className="badge bg-danger">
                         -{data.shiftStatus.potentialLoss.toLocaleString()} FRW
                       </span>

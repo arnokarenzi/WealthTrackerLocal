@@ -5,6 +5,8 @@ const n = (v) => {
   return Number.isFinite(x) ? x : 0;
 };
 
+// backend/controllers/dashboardController.js
+
 export const getDashboard = async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM MonthlyBudget WHERE id = 1");
@@ -19,11 +21,40 @@ export const getDashboard = async (req, res) => {
       return res.status(404).json({ error: "Budget row not found" });
 
     const b = rows[0];
-    const actualSpent = n(expensesRows[0].totalSpent);
+    const actualSpentFromDaily = n(expensesRows[0].totalSpent);
     const emergencyPct =
       templates.length > 0 ? n(templates[0].emergency_pct) : 0;
+    const RATE_PER_LETTER = 245;
 
-    // --- 1. DYNAMIC CALENDAR SHIFT LOGIC ---
+    // --- 1. INJECT LIVE BALANCE LOGIC ---
+    // Recalculate salary based on TOTAL letters recorded for the month
+    const liveSalary = n(b.translatedLetters) * RATE_PER_LETTER;
+    const liveIncome = liveSalary + n(b.otherIncome);
+
+    // Sum up all planned outgoings
+    const plannedEssentials =
+      n(b.rent) +
+      n(b.phoneInternet) +
+      n(b.electricityWater) +
+      n(b.food) +
+      n(b.miscellaneous) + // This is where your 11,500 likely lives
+      n(b.medical) +
+      n(b.familySupport);
+
+    const plannedSavings =
+      n(b.schoolSaving) + n(b.emergencyFund) + n(b.investment);
+
+    // Total Out = All Planned Costs + Any extra daily spending recorded
+    const totalOut = plannedEssentials + plannedSavings + actualSpentFromDaily;
+    const liveBalance = liveIncome - totalOut;
+
+    // AUTO-SYNC: Update the database so other pages see this same truth
+    await pool.query(
+      "UPDATE MonthlyBudget SET salary = ?, balance = ? WHERE id = 1",
+      [liveSalary, liveBalance],
+    );
+
+    // --- 2. DYNAMIC CALENDAR SHIFT LOGIC (Medals) ---
     const now = new Date();
     const day = now.getDate();
     const lastDayOfMonth = new Date(
@@ -39,14 +70,12 @@ export const getDashboard = async (req, res) => {
     const shiftLetters = n(b.shiftLetters);
     const remainingToMax = 750 - shiftLetters;
 
-    // --- 2. DYNAMIC PACE TARGETS ---
     const dailyMax = 750 / totalDaysInShift;
     const dailyMin = 600 / totalDaysInShift;
 
     const maxPace = shiftDay * dailyMax;
     const minPace = shiftDay * dailyMin;
 
-    // Initialize shiftStatus
     let shiftStatus = {
       medal: "None",
       message: "",
@@ -58,7 +87,6 @@ export const getDashboard = async (req, res) => {
       isShift1,
     };
 
-    // --- 3. PERFORMANCE ZONE LOGIC ---
     if (shiftLetters >= maxPace) {
       shiftStatus.medal = "🥇 Gold";
       shiftStatus.message = `Elite Performance! Only ${remainingToMax} letters left to reach your shift cap.`;
@@ -80,52 +108,36 @@ export const getDashboard = async (req, res) => {
       shiftStatus.variant = "danger";
     }
 
-    // --- 4. PROJECTED EARNINGS ENGINE ---
-    const RATE_PER_LETTER = 230;
+    // Projected Pay Calculation
     let projectedPay = 0;
-
-    // Logic: If you hit a medal, you get that tier's payout. Otherwise, pay per letter.
-    if (shiftStatus.medal.includes("Gold")) {
+    if (shiftStatus.medal.includes("Gold"))
       projectedPay = 750 * RATE_PER_LETTER;
-    } else if (shiftStatus.medal.includes("Silver")) {
+    else if (shiftStatus.medal.includes("Silver"))
       projectedPay = 600 * RATE_PER_LETTER;
-    } else if (shiftStatus.medal.includes("Bronze")) {
+    else if (shiftStatus.medal.includes("Bronze"))
       projectedPay = 450 * RATE_PER_LETTER;
-    } else {
-      projectedPay = shiftLetters * RATE_PER_LETTER;
-    }
+    else projectedPay = shiftLetters * RATE_PER_LETTER;
 
-    // Attach money metrics to status
     shiftStatus.projectedPay = projectedPay;
     shiftStatus.potentialLoss = 750 * RATE_PER_LETTER - projectedPay;
 
-    // --- 5. WEALTH SCORE CALCULATIONS ---
-    const totalIncome = n(b.salary) + n(b.otherIncome);
-    const essentials =
-      n(b.rent) +
-      n(b.phoneInternet) +
-      n(b.electricityWater) +
-      n(b.food) +
-      n(b.miscellaneous) +
-      n(b.medical) +
-      n(b.familySupport);
-
-    const emergencyTarget = (totalIncome * emergencyPct) / 100;
+    // --- 3. WEALTH SCORE (Using Live Data) ---
+    const emergencyTarget = (liveIncome * emergencyPct) / 100;
     const efCompletionPct =
       emergencyTarget > 0
         ? Math.min((n(b.emergencyFund) / emergencyTarget) * 100, 100)
         : 100;
 
     const investRatio =
-      totalIncome > 0 ? (n(b.investment) / totalIncome) * 100 : 0;
+      liveIncome > 0 ? (n(b.investment) / liveIncome) * 100 : 0;
     const disciplineMargin =
-      totalIncome > 0 ? (n(b.balance) / totalIncome) * 100 : 0;
+      liveIncome > 0 ? (liveBalance / liveIncome) * 100 : 0;
 
     let score = 0;
     score += (efCompletionPct / 100) * 40;
     score += Math.min((investRatio / 20) * 30, 30);
     score += Math.min((disciplineMargin / 10) * 20, 20);
-    if (n(b.balance) > 0) score += 10;
+    if (liveBalance > 0) score += 10;
 
     const stages = [
       "Priority: Build Safety",
@@ -141,11 +153,17 @@ export const getDashboard = async (req, res) => {
       emergencyTarget,
       efCompletionPct: Math.round(efCompletionPct),
       seedRatio: Math.round(investRatio),
-      essentials,
+      essentials: plannedEssentials,
       shiftStatus,
-      monthlyBudget: { ...b, remainingBalance: b.balance },
+      monthlyBudget: {
+        ...b,
+        salary: liveSalary,
+        balance: liveBalance,
+        remainingBalance: liveBalance,
+      },
     });
   } catch (err) {
+    console.error("Dashboard Error:", err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -167,7 +185,7 @@ export const updateLetters = async (req, res) => {
       });
     }
 
-    const newSalary = currentTotal * 230;
+    const newSalary = currentTotal * RATE_PER_LETTER;
 
     await pool.query(
       "UPDATE MonthlyBudget SET translatedLetters = ?, shiftLetters = ?, salary = ? WHERE id = 1",
