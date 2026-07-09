@@ -8,6 +8,7 @@ import DailyExpenses from "./pages/DailyExpenses";
 import SchoolFees from "./pages/SchoolFees";
 import SavingsGoals from "./pages/SavingsGoals";
 import AllocationPlanner from "./pages/AllocationPlanner";
+import GratitudeHistory from "./pages/GratitudeHistory";
 
 // Main Application Component
 function App() {
@@ -24,6 +25,7 @@ function App() {
             <Route path="/school-fees" element={<SchoolFees />} />
             <Route path="/savings" element={<SavingsGoals />} />
             <Route path="/allocations" element={<AllocationPlanner />} />
+            <Route path="/gratitude-history" element={<GratitudeHistory />} />
           </Routes>
         </main>
 

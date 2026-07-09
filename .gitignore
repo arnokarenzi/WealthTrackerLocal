@@ -14,3 +14,7 @@ yarn-error.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+
+# Exclude environment configuration files anywhere in the project
+**.env

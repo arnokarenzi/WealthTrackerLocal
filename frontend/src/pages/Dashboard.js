@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom"; // <--- Imported for page navigation
 import { getSavings } from "../api/api";
 import ChartComponent from "../components/ChartComponent";
 
@@ -9,8 +10,10 @@ const Dashboard = () => {
   const [pastGratitudes, setPastGratitudes] = useState([]);
   const [numLetters, setNumLetters] = useState("");
 
+  const navigate = useNavigate(); // <--- Initialized navigation controller
+
   const handleAddLetters = async () => {
-    if (!numLetters) return; // Don't submit empty values
+    if (!numLetters) return; // Do not submit empty values
 
     const valueToSubmit = numLetters; // Store value
     setNumLetters(""); // Clear input immediately for better feel
@@ -28,7 +31,6 @@ const Dashboard = () => {
     }
   };
 
-  // 1. ADD this new reset function inside the Dashboard component
   const handleResetShift = async () => {
     if (
       window.confirm(
@@ -73,8 +75,17 @@ const Dashboard = () => {
   const fetchGratitudes = async () => {
     try {
       const res = await fetch("http://localhost:5000/api/gratitude");
+      if (!res.ok) throw new Error("Failed to fetch gratitude items");
       const gratData = await res.json();
-      setPastGratitudes(gratData);
+
+      // Defensively parse array payload whether it arrives directly or nested
+      if (Array.isArray(gratData)) {
+        setPastGratitudes(gratData);
+      } else if (gratData && Array.isArray(gratData.data)) {
+        setPastGratitudes(gratData.data);
+      } else {
+        setPastGratitudes([]);
+      }
     } catch (error) {
       console.error("Gratitude Error:", error);
     }
@@ -88,16 +99,30 @@ const Dashboard = () => {
   }, []);
 
   const handleSaveGratitude = async () => {
+    if (!reflection.trim()) {
+      alert("Reflection cannot be empty.");
+      return;
+    }
+
+    const valueToSubmit = reflection;
+    setReflection(""); // Clear input immediately for an optimal responsive experience
+
     try {
-      await fetch("http://localhost:5000/api/gratitude", {
+      const response = await fetch("http://localhost:5000/api/gratitude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reflection }),
+        body: JSON.stringify({ reflection: valueToSubmit }),
       });
-      setReflection("");
+
+      if (!response.ok) {
+        throw new Error("Server rejected gratitude entry allocation.");
+      }
+
       fetchGratitudes();
     } catch (error) {
+      console.error("Save Gratitude Error:", error);
       alert("Failed to save reflection.");
+      setReflection(valueToSubmit); // Restores value if the connection fails so data is secure
     }
   };
 
@@ -115,6 +140,9 @@ const Dashboard = () => {
     essentials: data.essentials || 0, // Now dynamic from dashboardController
     discretionary: Number(data.monthlyBudget.schoolSaving || 0),
   };
+
+  // Safe fallback wrapper for mapping operations
+  const safeGratitudes = Array.isArray(pastGratitudes) ? pastGratitudes : [];
 
   return (
     <div className="container mt-4">
@@ -196,9 +224,7 @@ const Dashboard = () => {
         {/* LEFT COLUMN: Tracker & Gratitude Merged */}
         <div className="col-md-6">
           {/* SHIFT PERFORMANCE CARD */}
-          <div
-            className={`card shadow-sm border-0 mb-4 bg-white overflow-hidden`}
-          >
+          <div className="card shadow-sm border-0 mb-4 bg-white overflow-hidden">
             <div
               className={`p-3 bg-${data.shiftStatus.variant} text-white d-flex justify-content-between align-items-center`}
             >
@@ -212,7 +238,8 @@ const Dashboard = () => {
                 >
                   {data.shiftStatus.message}
                 </p>
-                <div className="row">
+
+                <div className="row mb-3">
                   <div className="col-6 border-end">
                     <small className="text-muted d-block">Shift Progress</small>
                     <h5>
@@ -222,7 +249,34 @@ const Dashboard = () => {
                   </div>
                   <div className="col-6">
                     <small className="text-muted d-block">Letters Done</small>
-                    <h5>{data.monthlyBudget.shiftLetters} / 750</h5>
+                    <h5>{data.monthlyBudget.shiftLetters} /817</h5>
+                  </div>
+                </div>
+
+                {/* PACING INNER WIDGET */}
+                <div className="row text-center border-top pt-3 bg-light rounded mx-0 p-2 border">
+                  <div className="col-6 border-end">
+                    <small className="text-muted d-block">Required Today</small>
+                    <strong className="h4 fw-bold text-dark">
+                      {data.shiftStatus.chunkPacingTarget > 0
+                        ? data.shiftStatus.chunkPacingTarget
+                        : 0}
+                    </strong>
+                    <small className="text-muted d-block small">
+                      Letters / Day
+                    </small>
+                  </div>
+                  <div className="col-6 d-flex flex-column justify-content-center align-items-center">
+                    <small className="text-muted d-block mb-1">
+                      Active Window
+                    </small>
+                    <span
+                      className={`badge ${data.shiftStatus.isShift1 ? "bg-warning text-dark" : "bg-info text-white"} fw-bold`}
+                    >
+                      {data.shiftStatus.isShift1
+                        ? "Shift 1 (1st - 15th)"
+                        : "Shift 2 (16th - End)"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -291,9 +345,17 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* GRATITUDE SECTION (Moved below performance) */}
+          {/* GRATITUDE SECTION WITH NAVIGATE LINK */}
           <div className="card shadow-sm p-4 border-0 mb-4 bg-white">
-            <h5>Daily Gratitude</h5>
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <h5 className="mb-0">Daily Gratitude</h5>
+              <button
+                className="btn btn-outline-primary btn-sm fw-bold"
+                onClick={() => navigate("/gratitude-history")}
+              >
+                📜 View History
+              </button>
+            </div>
             <textarea
               className="form-control border-0 shadow-sm mb-2 bg-light"
               placeholder="Today, I am grateful for..."
@@ -308,13 +370,12 @@ const Dashboard = () => {
               Save Reflection
             </button>
 
-            {/* ADD THIS PART TO USE THE VARIABLE AND FIX THE ERROR */}
             <div className="mt-3">
               <small className="text-muted d-block mb-2">
-                Past Reflections:
+                Recent Reflections:
               </small>
               <ul className="list-group list-group-flush small">
-                {pastGratitudes.slice(0, 3).map((g, i) => (
+                {safeGratitudes.slice(0, 3).map((g, i) => (
                   <li
                     key={i}
                     className="list-group-item px-0 bg-transparent border-light"
